@@ -23,7 +23,7 @@
 
 AWK=/usr/bin/awk
 GETOPTS=getopts
-VERSION=0.2
+VERSION=0.3
 
 
 do_version () {
@@ -279,9 +279,7 @@ do_strip () {
     '
 }
 
-
-
-while $GETOPTS Vhnm:i:d: c ; do
+while $GETOPTS Vhnm:i:d:f: c ; do
     case $c in
         n)      test=1
                 ;;
@@ -304,8 +302,6 @@ while $GETOPTS Vhnm:i:d: c ; do
 done
 
 shift `expr $OPTIND - 1`
-
-
 
 if [ $# -eq 0 ] ; then
     do_strip -
