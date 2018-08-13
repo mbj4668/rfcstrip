@@ -23,7 +23,7 @@
 
 AWK=/usr/bin/awk
 GETOPTS=getopts
-VERSION=0.3
+VERSION=0.4
 
 
 do_version () {
@@ -67,9 +67,12 @@ do_strip () {
         type = 0
     }
 
-    # generic start marker
-    type == 0 && /^[ \t]*<CODE BEGINS> +file +"(.*)" *$/ {
-        file = substr($4, 2, length($4)-2)
+    # generic start marker - we are a bit liberal and accept zero or more
+    # spaces between the mandatory tokens
+    type == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*"(.*)"/ {
+        # extract the filename
+        match($0, "\"(.*)\"")
+        file = substr($0, RSTART+1, RLENGTH-2)
         preskip = 3
         skip = 5
         skipped = -1
