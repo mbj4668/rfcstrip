@@ -23,7 +23,7 @@
 
 AWK=/usr/bin/awk
 GETOPTS=getopts
-VERSION=0.4
+VERSION=0.5
 
 
 do_version () {
@@ -110,12 +110,12 @@ do_strip () {
         delete line
     }
 
-    # process each line
-    {
+    # process each line in the file
+    type != 0 {
         # at the end of a page we go back one line (which is expected to
         # be a separator line), and start the counter skipped to skip the
         # next few lines.
-        if (type != 0 && $0 ~ /\[[pP]age [iv0-9]*\] */) {
+        if ($0 ~ /\[[pP]age [iv0-9]*\] */) {
             for (i = 0 ; i < preskip ; i++) {
                 n--
                 if (!(line[n] ~ /^[ \t]*$/)) {
@@ -147,8 +147,8 @@ do_strip () {
             }
         }
 
-        # so, if we are not skipping and inside a file, remember the line.
-        if ((skipped == -1) && (length(file) > 0)) {
+        # so, if we are not skipping, remember the line.
+        if (skipped == -1) {
             line[n++] = $0
         }
     }
@@ -169,7 +169,7 @@ do_strip () {
                 # contain white spaces.
                 if (!(line[i] ~ /^[ \t]*$/)) {
                     p = match(line[i], "[^ \t]")
-                    if ((p < strip) && (length(line[i]) > p)) { strip = p }
+                    if ((p < strip) && (length(line[i]) >= p)) { strip = p }
                 }
             }
             if (dir) {
@@ -217,7 +217,7 @@ do_strip () {
                     # contain white spaces.
                     if (!(line[i] ~ /^[ \t]*$/)) {
                         p = match(line[i], "[^ ]")
-                        if ((p < strip) && (length(line[i]) > p)) { strip = p }
+                        if ((p < strip) && (length(line[i]) >= p)) { strip = p }
                     }
                 }
 
@@ -256,7 +256,7 @@ do_strip () {
                     # contain white spaces.
                     if (!(line[i] ~ /^[ \t]*$/)) {
                         p = match(line[i], "[^ ]")
-                        if ((p < strip) && (length(line[i]) > p)) { strip = p }
+                        if ((p < strip) && (length(line[i]) >= p)) { strip = p }
                     }
                 }
 
