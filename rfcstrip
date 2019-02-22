@@ -9,6 +9,11 @@
 #   <CODE BEGINS> file "name-of-file"
 #   <CODE ENDS>
 #
+# OR:
+#   <CODE BEGINS> file
+#     "very-long-name-of-file"
+#   <CODE ENDS>
+#
 # Modified by Martin Bjorklund, Tail-f Systems.
 #
 # smistrip:
@@ -20,11 +25,21 @@
 # NOTE, that this script relies on awk (tested with GNU awk) and getopts
 # (shell builtin like in bash or standalone).
 #
+# History:
+#   0.6 - 2019-02-22
+#        handle -f option properly for YANG files without <CODE BEGINS>
+#        handle <CODE BEGINS> file with the filename on next line;
+#          needed for long file names
+#   0.5 - 2018-10-08
+#        fixed bug when a line with a single '}' is not properly extracted
+#   0.4 - 2018-08-13
+#        fixes #1 - liberal parsing of <CODE BEGINS>
+#   0.3 - 2018-05-17
+#        handle -f option
 
 AWK=/usr/bin/awk
 GETOPTS=getopts
-VERSION=0.5
-
+VERSION=0.6
 
 do_version () {
     echo "rfcstrip $VERSION"
@@ -40,8 +55,6 @@ do_usage () {
     echo "-f file    strip only the specified file"
     echo "file1 ...  input files to parse (RFCs, I-Ds, ...)"
 }
-
-
 
 do_strip () {
     if [ "$indir" ] ; then
@@ -65,11 +78,34 @@ do_strip () {
 
     BEGIN {
         type = 0
+        gen_marker_header = 0
     }
 
     # generic start marker - we are a bit liberal and accept zero or more
     # spaces between the mandatory tokens
     type == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*"(.*)"/ {
+        # extract the filename
+        match($0, "\"(.*)\"")
+        file = substr($0, RSTART+1, RLENGTH-2)
+        preskip = 3
+        skip = 5
+        skipped = -1
+        n = 0
+        type = 1
+        delete line
+
+        next
+    }
+
+    # generic start marker, with (hopefully) filename on next line */
+    type == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*$/ {
+        gen_marker_header = 1
+        delete line
+
+        next
+    }
+
+    type == 0 && gen_marker_header == 1 && /^[ \t]*"(.*)"*$/ {
         # extract the filename
         match($0, "\"(.*)\"")
         file = substr($0, RSTART+1, RLENGTH-2)
@@ -204,6 +240,7 @@ do_strip () {
         }
         file = ""
         type = 0
+        gen_marker_header = 0
     }
 
     # end of SMI module
@@ -248,7 +285,7 @@ do_strip () {
             modindent = -1
             # we assume that a module is ended with a single "}" with the
             # same indentation level as the module statement.
-            if ((length(single) == 0) || (single == module)) {
+            if ((length(single) == 0) || (single == file)) {
                 strip = 99
                 for (i=0 ; i < n ; i++) {
                     # find the minimum column that contains non-blank characters
