@@ -26,6 +26,8 @@
 # (shell builtin like in bash or standalone).
 #
 # History:
+#   1.0 - 2019-11-07
+#        fix regexp for filename on next line
 #   0.6 - 2019-02-22
 #        handle -f option properly for YANG files without <CODE BEGINS>
 #        handle <CODE BEGINS> file with the filename on next line;
@@ -46,7 +48,8 @@ do_version () {
 }
 
 do_usage () {
-    echo "Usage: rfcstrip [-Vhn] [-i dir] [-d dir] [-f file] file1 [file2 [...]]"
+    echo "Usage: rfcstrip [-Vhn] [-i dir] [-d dir] [-f file]" \
+         "file1 [file2 [...]]"
     echo "-V         show version"
     echo "-h         show usage information"
     echo "-n         do not write files"
@@ -105,7 +108,8 @@ do_strip () {
         next
     }
 
-    type == 0 && gen_marker_header == 1 && /^[ \t]*"(.*)"*$/ {
+    type == 0 && gen_marker_header == 1 && /^[ \t]*"(.*)"/ {
+        print "HERE"
         # extract the filename
         match($0, "\"(.*)\"")
         file = substr($0, RSTART+1, RLENGTH-2)
