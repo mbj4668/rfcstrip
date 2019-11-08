@@ -2,9 +2,9 @@
 #
 # rfcstrip --
 #
-#       Extract code from text files, like RFCs or I-Ds.
+#       Extract code from RFCs and I-Ds, in text or XML format.
 #
-# This program is a slightly patched version of smistrip.  In addition to
+# This program is a enhanced version of smistrip.  In addition to
 # MIB modules, it recognizes YANG modules and the markers:
 #   <CODE BEGINS> file "name-of-file"
 #   <CODE ENDS>
@@ -14,6 +14,10 @@
 #     "very-long-name-of-file"
 #   <CODE ENDS>
 #
+# Also, it handles the xml2rfc v3 XML format (RFC 7991).  In an XML file,
+# it recongizes the "sourcecode" element, and extracts into the filename
+# given in the "name" attribute".
+#
 # Modified by Martin Bjorklund, Tail-f Systems.
 #
 # smistrip:
@@ -22,12 +26,14 @@
 # See the file "COPYING" for information on usage and redistribution
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 #
-# NOTE, that this script relies on awk (tested with GNU awk) and getopts
-# (shell builtin like in bash or standalone).
+# NOTE, that this script relies on awk (tested with GNU awk), xsltproc
+# and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.1 - 2019-11-08
+#       extract from xml (xml2rfc v3) files
 #   1.0.1 - 2019-11-08
-#       removed debug printout, fixed version printout
+#       removed debug msg, fixed version printout
 #   1.0 - 2019-11-07
 #       fix regexp for filename on next line
 #   0.6 - 2019-02-22
@@ -41,9 +47,10 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
-AWK=/usr/bin/awk
+AWK=awk
 GETOPTS=getopts
-VERSION=1.0.1
+XSLTPROC=xsltproc
+VERSION=1.1
 
 do_version () {
     echo "rfcstrip $VERSION"
@@ -76,6 +83,18 @@ do_strip () {
     else
         CMD=zcat
     fi
+
+    $CMD "$FILE" | head -n 1 | grep -q '<\?xml'
+    if [ $? -ne 0 ] ; then
+        do_strip_txt $CMD $FILE
+    else
+        do_strip_xml $CMD $FILE
+    fi
+}
+
+do_strip_txt() {
+    CMD="$1"
+    FILE="$2"
 
     $CMD "$FILE" | \
     tr -d '\015' | \
@@ -324,6 +343,69 @@ do_strip () {
     '
 }
 
+do_strip_xml() {
+    CMD="$1"
+    FILE="$2"
+
+    # xsltproc needs the stylesheet as a file
+    XSLFILE1=$(mktemp)
+    XSLFILE2=$(mktemp)
+    trap "rm -f $XSLFILE1 $XSLFILE2" 0 2 3 15
+
+    # the first stylesheet is used to find all sourcecode names
+    cat > $XSLFILE1 <<EOF
+<xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="text"/>
+  <xsl:template match="/">
+    <xsl:for-each select="//sourcecode[@name]">
+      <xsl:value-of select="@name"/>
+      <xsl:text> </xsl:text>
+    </xsl:for-each>
+  </xsl:template>
+</xsl:stylesheet>
+EOF
+
+    if [ -n "$single" ] ; then
+        FILES="$single"
+    else
+        FILES=`$CMD "$FILE" | \
+        $XSLTPROC $XSLFILE1 - 2> /dev/null`
+    fi
+
+    # the next stylesheet prints the contents of the given sourcecode
+    cat > $XSLFILE2 <<EOF
+<xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="text"/>
+  <xsl:param name="FILE"/>
+  <xsl:template match="/">
+    <xsl:for-each select="//sourcecode[@name = \$FILE]">
+      <xsl:value-of select="."/>
+    </xsl:for-each>
+  </xsl:template>
+</xsl:stylesheet>
+EOF
+
+    for name in $FILES; do
+        if [ -n "$dir" ] ; then
+            outfile=$dir/$name
+        else
+            outfile=$name
+        fi
+        EXTRACT="$CMD \"$FILE\" |
+            $XSLTPROC --stringparam FILE $outfile $XSLFILE2 - 2> /dev/null |
+            $AWK 'BEGIN {x = 0} x == 0 && /^$/ {next;} x == 0 {x = 1} {print}'"
+        if [ "$test" = "1" ]; then
+           echo $outfile: `eval $EXTRACT | wc -l` lines.
+        else
+            eval $EXTRACT > $outfile
+            echo $outfile: `cat $outfile | wc -l` lines.
+        fi
+    done
+}
+
+
 while $GETOPTS Vhnm:i:d:f: c ; do
     case $c in
         n)      test=1
@@ -331,8 +413,16 @@ while $GETOPTS Vhnm:i:d:f: c ; do
         f)      single=$OPTARG
                 ;;
         i)      indir=$OPTARG
+                if [ ! -d $indir -a ! -h $indir ]; then
+                    echo "$indir is not a directory"
+                    exit 1
+                fi
                 ;;
         d)      dir=$OPTARG
+                if [ ! -d $dir -a ! -h $dir ]; then
+                    echo "$dir is not a directory"
+                    exit 1
+                fi
                 ;;
         h)      do_usage
                 exit 0
