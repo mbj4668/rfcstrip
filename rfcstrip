@@ -26,22 +26,24 @@
 # (shell builtin like in bash or standalone).
 #
 # History:
+#   1.0.1 - 2019-11-08
+#       removed debug printout, fixed version printout
 #   1.0 - 2019-11-07
-#        fix regexp for filename on next line
+#       fix regexp for filename on next line
 #   0.6 - 2019-02-22
-#        handle -f option properly for YANG files without <CODE BEGINS>
-#        handle <CODE BEGINS> file with the filename on next line;
-#          needed for long file names
+#       handle -f option properly for YANG files without <CODE BEGINS>
+#       handle <CODE BEGINS> file with the filename on next line;
+#         needed for long file names
 #   0.5 - 2018-10-08
-#        fixed bug when a line with a single '}' is not properly extracted
+#       fixed bug when a line with a single '}' is not properly extracted
 #   0.4 - 2018-08-13
-#        fixes #1 - liberal parsing of <CODE BEGINS>
+#       fixes #1 - liberal parsing of <CODE BEGINS>
 #   0.3 - 2018-05-17
-#        handle -f option
+#       handle -f option
 
 AWK=/usr/bin/awk
 GETOPTS=getopts
-VERSION=0.6
+VERSION=1.0.1
 
 do_version () {
     echo "rfcstrip $VERSION"
@@ -109,7 +111,6 @@ do_strip () {
     }
 
     type == 0 && gen_marker_header == 1 && /^[ \t]*"(.*)"/ {
-        print "HERE"
         # extract the filename
         match($0, "\"(.*)\"")
         file = substr($0, RSTART+1, RLENGTH-2)
