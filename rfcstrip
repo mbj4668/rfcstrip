@@ -30,6 +30,13 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.1balazs - 2020-03-26
+#       added -a option. If it is specified, the file must be an XML2RFC 
+#         XML file. 
+#         All artworks will be extracted from it if they carry a name attribute. 
+#         Artwork unfolding will also be executed. 
+#         If the artwork contains the <CODE BEGINS>, <CODE ENDS> markers 
+#         they are removed.
 #   1.1 - 2019-11-08
 #       extract from xml (xml2rfc v3) files
 #   1.0.1 - 2019-11-08
@@ -50,7 +57,7 @@
 AWK=awk
 GETOPTS=getopts
 XSLTPROC=xsltproc
-VERSION=1.1
+VERSION=1.1balazs
 
 do_version () {
     echo "rfcstrip $VERSION"
@@ -62,6 +69,7 @@ do_usage () {
     echo "-V         show version"
     echo "-h         show usage information"
     echo "-n         do not write files"
+    echo "-a         extract artwork from an XML file"
     echo "-i dir     try to read files from directory dir"
     echo "-d dir     write file to directory dir"
     echo "-f file    strip only the specified file"
@@ -83,12 +91,16 @@ do_strip () {
     else
         CMD=zcat
     fi
-
+    
     $CMD "$FILE" | head -n 1 | grep -q '<\?xml'
     if [ $? -ne 0 ] ; then
         do_strip_txt $CMD $FILE
     else
+      if [ "$artwork" ] ; then
+        do_strip_xml_artwork $CMD $FILE
+      else
         do_strip_xml $CMD $FILE
+      fi
     fi
 }
 
@@ -340,7 +352,7 @@ do_strip_txt() {
         }
     }
 
-    '
+    '    
 }
 
 do_strip_xml() {
@@ -406,7 +418,81 @@ EOF
 }
 
 
-while $GETOPTS Vhnm:i:d:f: c ; do
+do_strip_xml_artwork() {
+    CMD="$1"
+    FILE="$2"    
+    
+    # xsltproc needs the stylesheet as a file
+    XSLFILE1=$(mktemp)
+    XSLFILE2=$(mktemp)
+    trap "rm -f $XSLFILE1 $XSLFILE2" 0 2 3 15
+
+    # the first stylesheet is used to find all artwork names
+    cat > $XSLFILE1 <<EOF
+<xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="text"/>
+  <xsl:template match="/">
+    <xsl:for-each select="//artwork[@name]">
+      <xsl:value-of select="@name"/>
+      <xsl:text> </xsl:text>
+    </xsl:for-each>
+  </xsl:template>
+</xsl:stylesheet>
+EOF
+
+    if [ -n "$single" ] ; then
+        FILES="$single"
+    else
+        FILES=`$CMD "$FILE" | \
+        $XSLTPROC $XSLFILE1 - 2> /dev/null`
+    fi
+
+    # the next stylesheet prints the contents of the given artwork
+    cat > $XSLFILE2 <<EOF
+<xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="text"/>
+  <xsl:param name="FILE"/>
+  <xsl:template match="/">
+    <xsl:for-each select="//artwork[@name = \$FILE]">
+      <xsl:value-of select="."/>
+    </xsl:for-each>
+  </xsl:template>
+</xsl:stylesheet>
+EOF
+
+    for name in $FILES; do
+        if [ -n "$dir" ] ; then
+            outfile=$dir/$name
+        else
+            outfile=$name
+        fi
+        EXTRACT="$CMD \"$FILE\" |
+            $XSLTPROC --stringparam FILE $outfile $XSLFILE2 - 2> /dev/null |
+            $AWK 'BEGIN {x = 0} x == 0 && /^$/ {next;} x == 0 {x = 1} {print}'"
+        if [ "$test" = "1" ]; then
+           echo $outfile: `eval $EXTRACT | wc -l` lines.
+        else
+            eval $EXTRACT > $outfile
+            echo $outfile: `cat $outfile | wc -l` lines.
+        fi
+#     MISSING: The following transformations omit to adjust the number of lines per file
+#     first remove leading and trailing empty lines
+      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile > temp0
+#     next remove <CODE BEGINS> and <CODE ENDS>
+      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile | grep -a -v "<CODE " > temp1  
+#     Undo rfc artwork folding    
+      bash -c "rfcfold -r -i temp1 -o temp2"
+#     next remove leading and trailing empty lines added by rfcfold
+      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" temp2 > $outfile
+      rm temp1
+      rm temp2
+    done
+}
+
+
+while $GETOPTS Vhnam:i:d:f: c ; do
     case $c in
         n)      test=1
                 ;;
@@ -426,6 +512,8 @@ while $GETOPTS Vhnm:i:d:f: c ; do
                 ;;
         h)      do_usage
                 exit 0
+                ;;
+        a)      artwork=true
                 ;;
         V)      do_version
                 exit 0
