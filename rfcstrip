@@ -479,7 +479,6 @@ EOF
         fi
 #     MISSING: The following transformations omit to adjust the number of lines per file
 #     first remove leading and trailing empty lines
-      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile > temp0
 #     next remove <CODE BEGINS> and <CODE ENDS>
       grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile | grep -a -v "<CODE " > temp1  
 #     Undo rfc artwork folding    
