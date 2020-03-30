@@ -14,8 +14,10 @@
 #     "very-long-name-of-file"
 #   <CODE ENDS>
 #
-# Also, it handles the xml2rfc v3 XML format (RFC 7991).  In an XML file,
-# it recongizes the "sourcecode" element, and extracts into the filename
+# Also, it handles the xml2rfc v3 XML format (RFC 7991).  In an XML
+# file, it recongizes the "sourcecode" element, and extracts into the
+# filename given in the "name" attribute".  It also recognizes the
+# "artwork" element, and extracts, and extracts into the filename
 # given in the "name" attribute".
 #
 # Modified by Martin Bjorklund, Tail-f Systems.
@@ -30,6 +32,8 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.2-pre1 - 2020-xx-xx
+#       added option to extract and unfold artwork from xml files
 #   1.1 - 2019-11-08
 #       extract from xml (xml2rfc v3) files
 #   1.0.1 - 2019-11-08
@@ -47,10 +51,12 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
+VERSION=1.2-pre1
+
 AWK=awk
 GETOPTS=getopts
+GREP=grep
 XSLTPROC=xsltproc
-VERSION=1.1
 
 do_version () {
     echo "rfcstrip $VERSION"
@@ -62,6 +68,8 @@ do_usage () {
     echo "-V         show version"
     echo "-h         show usage information"
     echo "-n         do not write files"
+    echo "-a         extract artwork from XML files"
+    echo "           leading and trailing blank lines are removed"
     echo "-i dir     try to read files from directory dir"
     echo "-d dir     write file to directory dir"
     echo "-f file    strip only the specified file"
@@ -77,15 +85,19 @@ do_strip () {
     if [ ! -f "$FILE" -a -f "$FILE.gz" ] ; then
         FILE="$FILE.gz"
     fi
-    echo "$FILE" | grep -q '\.gz$'
+    echo "$FILE" | $GREP -q '\.gz$'
     if [ $? -ne 0 ] ; then
         CMD=cat
     else
         CMD=zcat
     fi
 
-    $CMD "$FILE" | head -n 1 | grep -q '<\?xml'
+    $CMD "$FILE" | head -n 1 | $GREP -q '<\?xml'
     if [ $? -ne 0 ] ; then
+        if [ "$artwork" = "1" ]; then
+            echo "-a requires an XML file"
+            exit 1
+        fi
         do_strip_txt $CMD $FILE
     else
         do_strip_xml $CMD $FILE
@@ -121,7 +133,7 @@ do_strip_txt() {
         next
     }
 
-    # generic start marker, with (hopefully) filename on next line */
+    # generic start marker, with (hopefully) filename on next line
     type == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*$/ {
         gen_marker_header = 1
         delete line
@@ -358,7 +370,17 @@ do_strip_xml() {
                 xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="text"/>
   <xsl:template match="/">
+EOF
+    if [ "$artwork" = "1" ]; then
+        cat >> $XSLFILE1 <<EOF
+    <xsl:for-each select="//artwork[@name]">
+EOF
+    else
+        cat >> $XSLFILE1 <<EOF
     <xsl:for-each select="//sourcecode[@name]">
+EOF
+    fi
+    cat >> $XSLFILE1 <<EOF
       <xsl:value-of select="@name"/>
       <xsl:text> </xsl:text>
     </xsl:for-each>
@@ -380,7 +402,17 @@ EOF
   <xsl:output method="text"/>
   <xsl:param name="FILE"/>
   <xsl:template match="/">
+EOF
+    if [ "$artwork" = "1" ]; then
+        cat >> $XSLFILE2 <<EOF
+    <xsl:for-each select="//artwork[@name = \$FILE]">
+EOF
+    else
+        cat >> $XSLFILE2 <<EOF
     <xsl:for-each select="//sourcecode[@name = \$FILE]">
+EOF
+    fi
+    cat >> $XSLFILE2 <<EOF
       <xsl:value-of select="."/>
     </xsl:for-each>
   </xsl:template>
@@ -393,21 +425,125 @@ EOF
         else
             outfile=$name
         fi
-        EXTRACT="$CMD \"$FILE\" |
-            $XSLTPROC --stringparam FILE $outfile $XSLFILE2 - 2> /dev/null |
-            $AWK 'BEGIN {x = 0} x == 0 && /^$/ {next;} x == 0 {x = 1} {print}'"
-        if [ "$test" = "1" ]; then
-           echo $outfile: `eval $EXTRACT | wc -l` lines.
-        else
-            eval $EXTRACT > $outfile
-            echo $outfile: `cat $outfile | wc -l` lines.
-        fi
+        $CMD "$FILE" | \
+        $XSLTPROC --stringparam FILE $outfile $XSLFILE2 - 2> /dev/null |
+        $AWK -vf="$outfile" -vtest="$test" '
+
+        BEGIN {
+            n = 0
+            x = 0
+            lcnt = 0
+            type = 0
+            gen_marker_header = 0
+            unfold = 0
+            prev_backslash = 0
+        }
+
+        # remove blank lines at the top
+        x == 0 && /^[ \t]*$/ {
+            next
+        }
+
+        # remove generic start marker if it is present
+        x == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*"(.*)"/ {
+            type = 1
+            next
+        }
+
+        # generic start marker, with (hopefully) filename on next line
+        x == 0 && /^[ \t]*<CODE BEGINS>[ \t]*file[ \t]*$/ {
+            type = 1
+            gen_marker_header = 1
+            next
+        }
+        x == 0 && gen_marker_header == 1 && /^[ \t]*"(.*)"/ {
+            next
+        }
+
+        # detect single backslash strategy
+        x == 0 && /NOTE: '\''\\'\'' line wrapping per BCP XXX \(RFC XXXX\)/ {
+            unfold = 1
+            next
+        }
+        # detect double backslash strategy
+        x == 0 && /NOTE: '\''\\\\'\'' line wrapping per BCP XXX \(RFC XXXX\)/ {
+            unfold = 2
+            next
+        }
+        # skip empty line after backslash strategy header
+        x == 0 && unfold != 0 && /^$/ {
+            x = 1
+            next
+        }
+        x == 0 {
+            x = 1
+        }
+        unfold == 1 && prev_backslash == 1 && /^[ \t]+/ {
+            sub("^[ \\t]+", "")
+        }
+        unfold == 1 && /\\$/ {
+            if (test != 1) {
+                printf substr($0, 0, length($0)-1) >f
+            }
+            prev_backslash = 1
+            next
+        }
+        unfold == 2 && prev_backslash == 1 && /^[ \t]*\\/ {
+            sub("^[ \\t]*\\\\", "")
+        }
+        unfold == 2 && /\\$/ {
+            if (test != 1) {
+                printf substr($0, 0, length($0)-1) >f
+            }
+            prev_backslash = 1
+            next
+        }
+        unfold != 0 {
+            prev_backslash = 0
+        }
+        # generic end marker
+        type == 1 && /^[ \t]*<CODE ENDS>.*$/ {
+            # skip rest
+            type = 2
+            next
+        }
+        type == 2 {
+            next
+        }
+
+        # empty line, collect it in order to remove empty lines at the end
+        /^[ \t]*$/ {
+            lcnt++
+            lines[lcnt] = $0
+            next
+        }
+        {
+            if (lcnt > 0) {
+                for (i in lines) {
+                    n++
+                    if (test != 1) {
+                        print lines[i] >f
+                    }
+                }
+                delete lines
+                lcnt = 0
+            }
+            n++
+            if (test != 1) {
+                print >f
+            }
+        }
+        END {
+            print f ": " n " lines."
+        }
+        '
     done
 }
 
-
-while $GETOPTS Vhnm:i:d:f: c ; do
+while $GETOPTS Vhnam:i:d:f: c ; do
     case $c in
+        a)      artwork=1
+                ;;
         n)      test=1
                 ;;
         f)      single=$OPTARG
