@@ -30,13 +30,15 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
-#   1.1balazs - 2020-03-26
+#   1.1balazs2 - 2020-03-30
 #       added -a option. If it is specified, the file must be an XML2RFC 
 #         XML file. 
 #         All artworks will be extracted from it if they carry a name attribute. 
 #         Artwork unfolding will also be executed. 
 #         If the artwork contains the <CODE BEGINS>, <CODE ENDS> markers 
 #         they are removed.
+#         NOTE, that this script relies on grep (tested with GNU grep). 
+#         Calling rfcfold depends on GNU bash
 #   1.1 - 2019-11-08
 #       extract from xml (xml2rfc v3) files
 #   1.0.1 - 2019-11-08
@@ -54,6 +56,7 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
+GREP=grep
 AWK=awk
 GETOPTS=getopts
 XSLTPROC=xsltproc
@@ -85,14 +88,14 @@ do_strip () {
     if [ ! -f "$FILE" -a -f "$FILE.gz" ] ; then
         FILE="$FILE.gz"
     fi
-    echo "$FILE" | grep -q '\.gz$'
+    echo "$FILE" | $GREP -q '\.gz$'
     if [ $? -ne 0 ] ; then
         CMD=cat
     else
         CMD=zcat
     fi
     
-    $CMD "$FILE" | head -n 1 | grep -q '<\?xml'
+    $CMD "$FILE" | head -n 1 | $GREP -q '<\?xml'
     if [ $? -ne 0 ] ; then
         do_strip_txt $CMD $FILE
     else
@@ -479,12 +482,12 @@ EOF
         fi
 #     MISSING: The following transformations omit to adjust the number of lines per file
 #     first remove leading and trailing empty lines
-#     next remove <CODE BEGINS> and <CODE ENDS>
-      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile | grep -a -v "<CODE " > temp1  
+#     next remove <CODE BEGINS> and <CODE ENDS>. It is assumed that these are on a separate line
+      $GREP -Pazo "(?s)[^ \t\n].*[^\s]+\N*" $outfile | $GREP -a -v "<CODE " > temp1  
 #     Undo rfc artwork folding    
       bash -c "rfcfold -r -i temp1 -o temp2"
 #     next remove leading and trailing empty lines added by rfcfold
-      grep -Pazo "(?s)[^ \t\n].*[^\s]+\N*" temp2 > $outfile
+      $GREP -Pazo "(?s)[^ \t\n].*[^\s]+\N*" temp2 > $outfile
       rm temp1
       rm temp2
     done
