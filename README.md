@@ -1,4 +1,5 @@
 # rfcstrip
-Extracts code components and artwork from RFCsand Internet drafts that are in txt or xml format.
-This fork added the -a option to extract any artwork from an xml file.
-It also pipes these through rfcfold -r and removes any COde BEGIN/END markers.
+Extracts code components, YANG modules and SMIv2 modules from RFCs and Internet Drafts
+
+Extracts artwork from xml RFCs and Internet drafts based on the name XML attribute.
+  It also pipes these through rfcfold -r and removes any Code BEGIN/END markers.
