@@ -321,12 +321,12 @@ do_strip_txt() {
                     }
                 }
 
+                if (dir) {
+                   f = dir"/"file
+                } else {
+                   f = file
+                }
                 if (test != "1") {
-                    if (dir) {
-                       f = dir"/"file
-                    } else {
-                       f = file
-                    }
                     for (i=0 ; i < n ; i++) {
                         print substr(line[i], strip) >f
                     }
