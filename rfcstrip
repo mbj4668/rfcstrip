@@ -575,7 +575,8 @@ done
 shift `expr $OPTIND - 1`
 
 if [ $# -eq 0 ] ; then
-    do_strip -
+    do_usage
+    exit 1
 else
     for f in "$@" ; do
         do_strip "$f"
