@@ -32,7 +32,7 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
-#   1.2-pre1 - 2020-xx-xx
+#   1.2 - 2020-03-31
 #       added option to extract and unfold artwork from xml files
 #   1.1 - 2019-11-08
 #       extract from xml (xml2rfc v3) files
@@ -51,7 +51,7 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
-VERSION=1.2-pre1
+VERSION=1.2
 
 AWK=awk
 GETOPTS=getopts
