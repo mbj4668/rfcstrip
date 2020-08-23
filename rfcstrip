@@ -170,7 +170,7 @@ do_strip_txt() {
 
     # start of YANG module
     type == 0 &&
-    /^[ \t]*(sub)?module +([A-Za-z0-9-]*) *{ *$/ {
+    /^[ \t]*<CODE BEGINS>[ \t]*(sub)?module +([A-Za-z0-9-]*) *{ *$/ {
         module = $2
         file = module".yang"
         modindent = match($0, "[^ \t]")
