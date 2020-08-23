@@ -32,6 +32,8 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.3 - 2020-08-23
+#       extract YANG modules only if prepended by <CODE BEGINS>
 #   1.2 - 2020-03-31
 #       added option to extract and unfold artwork from xml files
 #   1.1 - 2019-11-08
@@ -51,7 +53,7 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
-VERSION=1.2
+VERSION=1.3
 
 AWK=awk
 GETOPTS=getopts
