@@ -32,6 +32,9 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.2.1 - 20200-08-24
+#       added option to extract only files marked with <CODE BEGINS> from
+#       text files
 #   1.2 - 2020-03-31
 #       added option to extract and unfold artwork from xml files
 #   1.1 - 2019-11-08
@@ -51,7 +54,7 @@
 #   0.3 - 2018-05-17
 #       handle -f option
 
-VERSION=1.2
+VERSION=1.2.1
 
 AWK=awk
 GETOPTS=getopts
@@ -63,12 +66,13 @@ do_version () {
 }
 
 do_usage () {
-    echo "Usage: rfcstrip [-Vhn] [-i dir] [-d dir] [-f file]" \
+    echo "Usage: rfcstrip [-Vhnac] [-i dir] [-d dir] [-f file]" \
          "file1 [file2 [...]]"
     echo "-V         show version"
     echo "-h         show usage information"
     echo "-n         do not write files"
     echo "-a         extract artwork from XML files"
+    echo "-c         only extract files marked CODE BEGINS from txt files"
     echo "           leading and trailing blank lines are removed"
     echo "-i dir     try to read files from directory dir"
     echo "-d dir     write file to directory dir"
@@ -110,7 +114,8 @@ do_strip_txt() {
 
     $CMD "$FILE" | \
     tr -d '\015' | \
-    $AWK -vtest="$test" -vdir="$dir" -vsingle="$single" '
+    $AWK -vtest="$test" -vcodemarker="$codemarker" \
+         -vdir="$dir" -vsingle="$single" '
 
     BEGIN {
         type = 0
@@ -156,7 +161,7 @@ do_strip_txt() {
     }
 
      # start of SMI module
-    type == 0 &&
+    type == 0 && codemarker != 1 &&
     /^[ \t]*[A-Za-z0-9-]* *(PIB-)?DEFINITIONS *(::=)? *(BEGIN)? *$/ {
         file = $1
         preskip = 3
@@ -169,7 +174,7 @@ do_strip_txt() {
     }
 
     # start of YANG module
-    type == 0 &&
+    type == 0 && codemarker != 1 &&
     /^[ \t]*(sub)?module +([A-Za-z0-9-]*) *{ *$/ {
         module = $2
         file = module".yang"
@@ -540,9 +545,11 @@ EOF
     done
 }
 
-while $GETOPTS Vhnam:i:d:f: c ; do
+while $GETOPTS Vhnacm:i:d:f: c ; do
     case $c in
         a)      artwork=1
+                ;;
+        c)      codemarker=1
                 ;;
         n)      test=1
                 ;;
