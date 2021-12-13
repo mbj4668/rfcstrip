@@ -20,7 +20,9 @@
 # "artwork" element, and extracts, and extracts into the filename
 # given in the "name" attribute".
 #
-# Modified by Martin Bjorklund, Tail-f Systems.
+# Handles line unfolding accoring to RFC 8792.
+#
+# Modified by Martin Bjorklund.
 #
 # smistrip:
 # Copyright (c) 1999 Frank Strauss, Technical University of Braunschweig.
@@ -32,6 +34,8 @@
 # and getopts (shell builtin like in bash or standalone).
 #
 # History:
+#   1.3 - 2021-12-13
+#       updated unfold detection pattern to the RFC 8792 pattern
 #   1.2.1 - 20200-08-24
 #       added option to extract only files marked with <CODE BEGINS> from
 #       text files
@@ -466,12 +470,12 @@ EOF
         }
 
         # detect single backslash strategy
-        x == 0 && /NOTE: '\''\\'\'' line wrapping per BCP XXX \(RFC XXXX\)/ {
+        x == 0 && /NOTE: '\''\\'\'' line wrapping per RFC 8792/ {
             unfold = 1
             next
         }
         # detect double backslash strategy
-        x == 0 && /NOTE: '\''\\\\'\'' line wrapping per BCP XXX \(RFC XXXX\)/ {
+        x == 0 && /NOTE: '\''\\\\'\'' line wrapping per RFC 8792/ {
             unfold = 2
             next
         }
